@@ -1,25 +1,11 @@
-// parsers/DiscordParser.js
-// DiscordChatExporter TXT 형식 파서
-//
-// 헤더:
-//   ============================================================
-//   Guild: 서버명
-//   Channel: 채널명
-//   ============================================================
-//
-// 메시지:
-//   [08-May-24 10:30 PM] 사용자명
-//   메시지 내용
-//
-// (pinned) 태그, Attachments, Reactions 등 포함 가능
-
 class DiscordParser {
   constructor() {
     this.name = 'discord';
     this.label = '디스코드';
 
-    // [08-May-24 10:30 PM] 또는 [2024-05-08 22:30] 등 다양한 타임스탬프
-    this._regexTimestamp = /^\[(\d{2}-\w{3}-\d{2,4}\s+\d{1,2}:\d{2}\s*(?:AM|PM)?|\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?)\]\s+(.+?)(?:\s+\(pinned\))?$/;
+    // 기존 영문 형식 및 새로운 한국어 날짜/시간 형식[2026. 1. 7. 오후 12:59] 모두 대응
+    // 그룹 1: 타임스탬프 문자열, 그룹 2: 사용자명
+    this._regexTimestamp = /^\[(\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.\s*(?:오전|오후)\s*\d{1,2}:\d{2}|\d{2}-\w{3}-\d{2,4}\s+\d{1,2}:\d{2}\s*(?:AM|PM)?|\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?)\]\s+(.+?)(?:\s+\(pinned\))?$/;
 
     // 헤더 구분선
     this._separator = /^={10,}$/;
@@ -33,8 +19,8 @@ class DiscordParser {
     const hasSeparator = lines.some(l => this._separator.test(l.trim()));
     const hasGuild = lines.some(l => l.startsWith('Guild:') || l.startsWith('Channel:'));
 
-    // 타임스탬프 형식 감지
-    const tsPattern = /^\[\d{2}-\w{3}-\d{2,4}\s+\d{1,2}:\d{2}/;
+    // 타임스탬프 형식 감지 (한국어 패턴인 `[연도.` 형식도 조건에 추가)
+    const tsPattern = /^\[(?:\d{2}-\w{3}-\d{2,4}\s+\d{1,2}:\d{2}|\d{4}\.\s*\d{1,2}\.)/;
     const hasTS = lines.some(l => tsPattern.test(l.trim()));
 
     return (hasSeparator && hasGuild) || hasTS;
