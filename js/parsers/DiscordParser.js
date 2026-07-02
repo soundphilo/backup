@@ -3,31 +3,40 @@ class DiscordParser {
     this.name = 'discord';
     this.label = '디스코드';
 
-    // 기존 영문 형식 및 새로운 한국어 날짜/시간 형식[2026. 1. 7. 오후 12:59] 모두 대응
-    // 그룹 1: 타임스탬프 문자열, 그룹 2: 사용자명
+    // [2026. 1. 7. 오후 12:59] 유저네임 형식 확실하게 매칭
+    // 연. 월. 일. 뒤의 미세한 공백(\s*) 및 오전/오후 뒤의 공백까지 모두 허용
     this._regexTimestamp = /^\[(\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.\s*(?:오전|오후)\s*\d{1,2}:\d{2}|\d{2}-\w{3}-\d{2,4}\s+\d{1,2}:\d{2}\s*(?:AM|PM)?|\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?)\]\s+(.+?)(?:\s+\(pinned\))?$/;
-
-    // 헤더 구분선
-    this._separator = /^={10,}$/;
+    
+    // 헤더 구분선 매칭 (느슨하게 변경)
+    this._separator = /^={5,}$/;
   }
 
   canParse(text) {
     if (!text || typeof text !== 'string') return false;
-    const lines = text.split('\n').slice(0, 30);
+    
+    // 윈도우 줄바꿈 제거 및 첫 노이즈 청소 후 상위 100줄 검사
+    const cleanedText = text.replace(/^\s+/, '').replace(/\r\n/g, '\n');
+    const lines = cleanedText.split('\n').slice(0, 100);
 
-    // 구분선 + Guild/Channel 헤더 감지
+    // 헤더 구조 감지 (앞뒤 공백 무시하도록 trim() 보완)
     const hasSeparator = lines.some(l => this._separator.test(l.trim()));
-    const hasGuild = lines.some(l => l.startsWith('Guild:') || l.startsWith('Channel:'));
+    const hasGuild = lines.some(l => {
+      const trimmed = l.trim();
+      return trimmed.startsWith('Guild:') || trimmed.startsWith('Channel:');
+    });
 
-    // 타임스탬프 형식 감지 (한국어 패턴인 `[연도.` 형식도 조건에 추가)
-    const tsPattern = /^\[(?:\d{2}-\w{3}-\d{2,4}\s+\d{1,2}:\d{2}|\d{4}\.\s*\d{1,2}\.)/;
-    const hasTS = lines.some(l => tsPattern.test(l.trim()));
+    // 타임스탬프 자체 감지 (현재 정규식으로 직접 한 줄이라도 맞는지 검사)
+    const hasTS = lines.some(l => this._regexTimestamp.test(l.trim()));
 
+    // 확실한 헤더 쌍이 있거나, 바뀐 한국어 타임스탬프 문장이 하나라도 감지되면 무조건 true
     return (hasSeparator && hasGuild) || hasTS;
   }
 
   parse(chatData) {
-    const lines = chatData.split('\n');
+    // 텍스트 전체의 줄바꿈과 맨 앞 노이즈 통일
+    const cleanedData = chatData.replace(/^\s+/, '').replace(/\r\n/g, '\n');
+    const lines = cleanedData.split('\n');
+    
     const messages = [];
     let currentMessage = null;
     let inHeader = true;
@@ -36,7 +45,7 @@ class DiscordParser {
     for (const rawLine of lines) {
       const line = rawLine.trim();
 
-      // 헤더 구간 처리 (첫 두 개의 구분선 사이)
+      // 1. 헤더 건너뛰기 로직
       if (this._separator.test(line)) {
         headerDone++;
         if (headerDone >= 2) inHeader = false;
@@ -44,10 +53,10 @@ class DiscordParser {
       }
       if (inHeader) continue;
 
-      // "Exported N message(s)" 꼬리말
+      // 꼬리말 건너뛰기
       if (line.startsWith('Exported ') && line.includes('message')) continue;
 
-      // 타임스탬프 라인 = 새 메시지 시작
+      // 2. 타임스탬프 라인 매칭 = 새 메시지 시작
       const tsMatch = line.match(this._regexTimestamp);
       if (tsMatch) {
         if (currentMessage) messages.push(currentMessage);
@@ -59,26 +68,25 @@ class DiscordParser {
         continue;
       }
 
+      // 첫 타임스탬프가 나오기 전의 잡다한 라인은 스킵
       if (!currentMessage) continue;
 
-      // 첨부파일/이모지 반응 등 메타 라인은 메시지에 포함시키되 빈 줄로 구분
+      // 3. 메타 정보 라인 스킵
       if (
         line.startsWith('{Attachments}') ||
         line.startsWith('{Reactions}') ||
         line.startsWith('{Embed}') ||
         line.startsWith('{Stickers}')
       ) {
-        // 메타 정보는 스킵
         continue;
       }
 
-      // 빈 줄: 메시지 사이 구분 (같은 화자의 연속 단락)
+      // 4. 본문 누적
       if (!line) {
         if (currentMessage.chatMessage) currentMessage.chatMessage += '\n';
         continue;
       }
 
-      // 메시지 본문 누적
       if (currentMessage.chatMessage) {
         currentMessage.chatMessage += '\n' + line;
       } else {
@@ -86,6 +94,7 @@ class DiscordParser {
       }
     }
 
+    // 마지막 메시지 잔여분 추가
     if (currentMessage && currentMessage.chatMessage.trim()) {
       messages.push(currentMessage);
     }
