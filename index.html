@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>채팅 백업 도구</title>
+  <link rel="icon" href="fav.png" type="image/png">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+<!-- 헤더 -->
+<header class="app-header">
+  <a class="app-logo" href="#">
+    <img class="app-logo-mark" src="fav.png" alt="로고">
+    채팅 백업
+  </a>
+  <div class="header-actions">
+    <button class="icon-btn" id="theme-btn" title="다크모드 전환">
+      <i class="fas fa-moon"></i>
+    </button>
+    <button class="icon-btn" id="help-btn" title="도움말" onclick="document.getElementById('help-panel').classList.add('open');document.getElementById('help-overlay').classList.add('show')">
+      <i class="fas fa-question"></i>
+    </button>
+  </div>
+</header>
+
+<!-- 메인 2단 레이아웃 -->
+<div class="app-body">
+
+  <!-- 왼쪽: 입력 + 프로필 -->
+  <aside class="left-panel">
+
+    <!-- 플랫폼 선택 -->
+    <div class="platform-section">
+      <div class="platform-label">플랫폼</div>
+      <div class="platform-pills">
+        <button class="platform-pill active" data-platform="auto">
+          <span class="platform-dot dot-auto"></span>자동 감지
+        </button>
+        <button class="platform-pill" data-platform="band">
+          <span class="platform-dot dot-band"></span>밴드
+        </button>
+        <button class="platform-pill" data-platform="kakao">
+          <span class="platform-dot dot-kakao"></span>카카오톡
+        </button>
+        <button class="platform-pill" data-platform="discord">
+          <span class="platform-dot dot-discord"></span>디스코드
+        </button>
+        <button class="platform-pill" data-platform="roll20">
+          <span class="platform-dot dot-roll20"></span>롤20
+        </button>
+      </div>
+    </div>
+
+    <!-- 텍스트 입력 -->
+    <div class="input-section">
+      <label for="input-text">채팅 붙여넣기</label>
+      <textarea
+        id="input-text"
+        placeholder="채팅 내보내기 텍스트를 여기에 붙여넣으세요.
+txt 파일을 끌어다 놓아도 됩니다.
+
+밴드, 카카오톡, 디스코드 형식을 자동으로 인식합니다."
+      ></textarea>
+      <div class="detect-badge" id="detect-badge"></div>
+      <button class="btn btn-primary" id="analyze-btn" style="align-self:flex-start">
+        <i class="fas fa-search"></i> 분석
+      </button>
+    </div>
+
+    <!-- 프로필 설정 -->
+    <div class="profiles-section">
+      <div class="profiles-header">
+        <span class="section-title">참여자</span>
+        <div class="profiles-actions">
+          <button class="text-btn" id="uncheck-all-btn" onclick="
+            window.chatApp.state.selectedUsers.clear();
+            window.chatApp.uiManager._saveProfiles();
+            window.chatApp.uiManager.renderProfileCards();
+            window.chatApp.uiManager.renderMessages();
+          ">체크 해제</button>
+          <button class="text-btn" id="select-mode-btn" onclick="
+            window.chatApp.uiManager.toggleProfileSelectionMode(true);
+          ">선택 초기화</button>
+          <button class="text-btn" id="reset-selected-btn" style="display:none" onclick="
+            window.chatApp.uiManager.resetSelectedProfiles();
+          ">초기화</button>
+          <button class="text-btn" id="cancel-select-btn" style="display:none" onclick="
+            window.chatApp.uiManager.toggleProfileSelectionMode(false);
+          ">취소</button>
+        </div>
+      </div>
+      <div class="profile-grid" id="profile-grid"></div>
+    </div>
+
+  </aside>
+
+  <!-- 오른쪽: 미리보기 -->
+  <main class="right-panel">
+
+    <!-- 툴바 -->
+    <div class="preview-toolbar">
+      <div class="preview-toolbar-left">
+        <span class="msg-count" id="msg-count"></span>
+      </div>
+
+      <!-- 꾸미기 토글 -->
+      <button class="btn" id="decor-btn">
+        <i class="fas fa-chevron-up"></i> 꾸미기
+      </button>
+
+      <!-- HTML 복사 -->
+      <button class="btn btn-primary" id="copy-btn">
+        <i class="fas fa-copy"></i> HTML 복사
+      </button>
+
+      <!-- 다운로드 드롭다운 -->
+      <div class="dropdown-wrap">
+        <button class="btn" id="download-btn">
+          <i class="fas fa-download"></i> 저장
+          <i class="fas fa-caret-down" style="font-size:11px;margin-left:2px"></i>
+        </button>
+        <div class="dropdown-menu" id="download-menu">
+          <div class="dropdown-item" id="download-html-btn">
+            <i class="fas fa-file-code"></i> HTML로 저장
+          </div>
+          <div class="dropdown-item" id="download-txt-btn">
+            <i class="fas fa-file-alt"></i> TXT로 저장
+          </div>
+        </div>
+      </div>
+
+      <!-- 초기화 -->
+      <button class="icon-btn" id="clear-btn" title="초기화">
+        <i class="fas fa-trash"></i>
+      </button>
+    </div>
+
+    <!-- 꾸미기 패널 (접힘) -->
+    <div class="decor-panel" id="decor-panel">
+      <div class="decor-panel-inner">
+
+        <div class="decor-row">
+          <span class="decor-label">글자 크기</span>
+          <div class="font-size-control">
+            <input type="range" id="font-size-slider" min="12" max="20" step="1" value="14">
+            <span class="font-size-value" id="font-size-value">14px</span>
+          </div>
+        </div>
+
+        <div class="decor-row">
+          <span class="decor-label">태그 강조</span>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+            <input type="checkbox" id="highlight-tags-toggle" checked>
+            @멘션 파란색으로
+          </label>
+        </div>
+
+        <div class="decor-row">
+          <span class="decor-label">내 프로필</span>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+            <input type="checkbox" id="show-my-profile-toggle" checked>
+            내 메시지에 사진 표시
+          </label>
+        </div>
+
+        <div class="decor-row">
+          <span class="decor-label">프로필 사진 모양</span>
+          <div class="avatar-shape-control">
+            <button class="avatar-shape-btn active" data-shape="circle" title="원형">
+              <span class="shape-preview shape-circle"></span>
+            </button>
+            <button class="avatar-shape-btn" data-shape="rounded" title="둥근 네모">
+              <span class="shape-preview shape-rounded"></span>
+            </button>
+            <button class="avatar-shape-btn" data-shape="square" title="네모">
+              <span class="shape-preview shape-square"></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 롤20 CSS 편집 토글 (롤20 플랫폼일 때만 표시) -->
+        <div class="decor-row" id="r20-css-row" style="display:none">
+          <span class="decor-label">CSS 편집</span>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+            <input type="checkbox" id="r20-css-enabled">
+            메시지 편집 시 CSS까지 편집
+          </label>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- 채팅 미리보기 -->
+    <div id="chat-container">
+      <div class="empty-state">
+        <div class="empty-state-icon"><i class="fas fa-comments"></i></div>
+        <div class="empty-state-text">채팅을 붙여넣고 분석을 누르세요</div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- 로딩 오버레이 -->
+<div class="loading-overlay" id="loading-overlay">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">처리 중...</div>
+</div>
+
+<!-- 토스트 -->
+<div class="toast" id="toast"></div>
+
+<!-- 도움말 패널 -->
+<div class="help-overlay" id="help-overlay" onclick="document.getElementById('help-panel').classList.remove('open');this.classList.remove('show')"></div>
+<aside class="help-panel" id="help-panel">
+  <div class="help-header">
+    <span class="help-title">도움말</span>
+    <button class="icon-btn" onclick="document.getElementById('help-panel').classList.remove('open');document.getElementById('help-overlay').classList.remove('show')">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+  <div class="help-body">
+    <div id="help-list-view">
+      <div class="help-section-list">
+        <button class="help-section-btn" onclick="window._showHelpDetail('analyze')"><i class="fas fa-search"></i> 채팅 입력 및 분석</button>
+        <button class="help-section-btn" onclick="window._showHelpDetail('profile')"><i class="fas fa-user"></i> 프로필 설정</button>
+        <button class="help-section-btn" onclick="window._showHelpDetail('preview')"><i class="fas fa-edit"></i> 채팅 미리보기 및 편집</button>
+        <button class="help-section-btn" onclick="window._showHelpDetail('download')"><i class="fas fa-download"></i> 파일로 저장하기</button>
+        <button class="help-section-btn" onclick="window._showHelpDetail('settings')"><i class="fas fa-sliders-h"></i> 설정 옵션</button>
+        <button class="help-section-btn" onclick="window._showHelpDetail('update')"><i class="fas fa-history"></i> 업데이트 내역</button>
+      </div>
+      <div style="height:1px;background:var(--border);margin:16px 0"></div>
+      <button class="cache-clear-btn" onclick="window._clearAllCache()"><i class="fas fa-trash-alt"></i> 모든 캐시 및 설정 초기화</button>
+      <div style="padding:16px 0 4px;font-size:11px;color:var(--text-3);text-align:center">v2.1.0 · @C2H5OH_snow</div>
+    </div>
+    <div id="help-detail-view" style="display:none;flex-direction:column;height:100%">
+      <button class="help-detail-back" onclick="window._showHelpList()"><i class="fas fa-arrow-left"></i> 뒤로</button>
+      <div class="help-detail-title" id="help-detail-title"></div>
+      <div class="help-detail-body" id="help-detail-body"></div>
+    </div>
+  </div>
+
+</aside>
+
+<!-- 스크립트 (파서 먼저) -->
+<script src="js/parsers/BandParser.js"></script>
+<script src="js/parsers/Roll20Parser.js"></script>
+<script src="js/parsers/KakaoParser.js"></script>
+<script src="js/parsers/DiscordParser.js"></script>
+<script src="js/Data.js"></script>
+<script src="js/Media.js"></script>
+<script src="js/UI.js"></script>
+<script src="js/Export.js"></script>
+<script src="js/Core.js"></script>
+
+<script>
+const HELP_CONTENT = {
+  analyze: {
+    title: '채팅 입력 및 분석',
+    body: `
+      <h4>붙여넣기 / 파일 불러오기</h4>
+      <ol>
+        <li>채팅 앱에서 대화 내보내기(.txt)를 실행합니다.</li>
+        <li>내보낸 텍스트를 입력창에 붙여넣거나, .txt 파일을 드래그&드롭합니다.</li>
+        <li><strong>분석</strong> 버튼을 누르면 플랫폼을 자동으로 인식합니다.</li>
+        <li>자동 인식이 안 될 경우 상단 플랫폼 버튼으로 직접 선택하세요.</li>
+      </ol>
+      <h4>지원 플랫폼 및 내보내기 방법</h4>
+      <ul>
+        <li><strong>네이버 밴드</strong> — 채팅방 우측 상단 메뉴(☰) → 대화 설정 → 대화 내용 내보내기</li>
+        <li><strong>카카오톡 PC</strong> — 채팅방 우측 상단 메뉴 → 대화 내보내기</li>
+        <li><strong>카카오톡 모바일</strong> — 채팅방 우측 상단 메뉴 → 대화 내용 내보내기 (오픈채팅 포함)</li>
+        <li><strong>디스코드</strong> — DiscordChatExporter로 TXT 형식 내보내기 후 붙여넣기</li>
+        <li><strong>롤20</strong> — F12 → 콘솔에서 <code>document.querySelector('#textchat').outerHTML</code> 복사 후 붙여넣기, 또는 Elements 탭에서 <code>&lt;div class="textchatcontainer" id="textchat"&gt;</code> 우클릭 → Copy outerHTML</li>
+      </ul>
+      <p class="help-note">💡 최대 참여자 수: 50명. 초과 시 분석이 중단됩니다.</p>
+      <p class="help-note">💡 채팅 내용은 외부로 전송되지 않으며 브라우저 내에서만 처리됩니다.</p>
+    `
+  },
+  profile: {
+    title: '프로필 설정',
+    body: `
+      <h4>각 항목 설명</h4>
+      <ul>
+        <li><strong>프로필 이미지</strong> — 사진 영역 클릭 → 이미지 파일 선택. 브라우저를 닫아도 유지됩니다.</li>
+        <li><strong>표시 이름</strong> — 이름 입력란 클릭 후 수정. 원본 닉네임은 아래에 작게 표시됩니다.</li>
+        <li><strong>말풍선 / 이름 색상</strong> — 색상 원(⬤) 클릭 → 프리셋 선택 또는 Hex 직접 입력. 탭으로 말풍선·이름 색상을 각각 설정합니다.</li>
+        <li><strong>나로 설정</strong> — 해당 사용자의 메시지를 오른쪽(내 메시지)으로 표시합니다. 여러 명 동시 설정 가능.</li>
+        <li><strong>숨기기 (눈 아이콘)</strong> — 해당 사용자 메시지를 미리보기와 내보내기 모두에서 제외합니다.</li>
+      </ul>
+      <h4>초기화</h4>
+      <ul>
+        <li><strong>개별 초기화</strong> — 각 프로필의 ↺ 버튼. 이름·색상·이미지 모두 초기화됩니다.</li>
+        <li><strong>선택 초기화</strong> — 체크박스로 복수 선택 후 한 번에 초기화.</li>
+        <li><strong>전체 체크 해제</strong> — "나로 설정" 상태를 전부 해제합니다.</li>
+      </ul>
+      <p class="help-note">💡 프로필 설정은 브라우저에 저장되어 새로고침 후에도 유지됩니다.</p>
+    `
+  },
+  preview: {
+    title: '채팅 미리보기 및 편집',
+    body: `
+      <h4>미리보기</h4>
+      <ul>
+        <li>상대방 메시지는 왼쪽, 내 메시지(나로 설정한 사용자)는 오른쪽에 표시됩니다.</li>
+        <li>같은 사람이 같은 시간대에 연속으로 보낸 메시지는 그룹으로 묶여 이름과 아바타가 한 번만 표시됩니다.</li>
+        <li>@멘션은 파란색으로 강조됩니다 (꾸미기 패널에서 끌 수 있음).</li>
+      </ul>
+      <h4>메시지 편집</h4>
+      <ul>
+        <li>메시지 클릭 → 편집 모드 진입. ESC 또는 취소 버튼으로 닫습니다.</li>
+        <li>이미지 첨부(🖼) 버튼으로 말풍선 아래에 이미지를 추가할 수 있습니다.</li>
+        <li>삭제 버튼으로 해당 메시지를 제거합니다.</li>
+      </ul>
+      <h4>롤20 전용</h4>
+      <ul>
+        <li>GM 지문(이탤릭), 판정 pill, 주사위 테이블이 원본 스타일 그대로 표시됩니다.</li>
+        <li>CSS 편집 모드 — 꾸미기 패널에서 활성화 시 rawHTML을 직접 수정할 수 있습니다. 기본은 비활성 상태이며, 페이지를 새로고침하면 자동으로 꺼집니다.</li>
+      </ul>
+    `
+  },
+  download: {
+    title: '파일로 저장하기',
+    body: `
+      <h4>저장 / 내보내기 방법</h4>
+      <ul>
+        <li><strong>HTML로 저장</strong> — 프로필 이미지·색상·스타일이 모두 포함된 단독 실행 HTML 파일로 저장합니다. 브라우저로 바로 열 수 있습니다.</li>
+        <li><strong>TXT로 저장</strong> — HTML 내용을 .txt 확장자로 저장합니다. 내용은 HTML과 동일합니다.</li>
+        <li><strong>HTML 복사</strong> — 변환된 HTML을 클립보드에 복사합니다. HTTPS 또는 localhost 환경에서만 동작합니다.</li>
+      </ul>
+      <p class="help-note">💡 파일명은 플랫폼(N명)_날짜.html 형식으로 자동 생성됩니다.</p>
+      <p class="help-note">💡 다크모드 상태에서도 내보내기 결과는 항상 라이트 배경으로 고정됩니다.</p>
+      <p class="help-note">💡 프로필 이미지는 파일 내에 포함되므로 다른 기기에서도 그대로 표시됩니다.</p>
+    `
+  },
+  settings: {
+    title: '꾸미기 / 설정 옵션',
+    body: `
+      <h4>꾸미기 패널 (화면 우측 하단)</h4>
+      <ul>
+        <li><strong>글자 크기</strong> — 12~20px 슬라이더로 미리보기 전체 글자 크기를 조절합니다.</li>
+        <li><strong>태그 강조</strong> — @멘션을 파란색으로 강조할지 여부를 설정합니다.</li>
+        <li><strong>내 프로필</strong> — 나로 설정한 사용자의 프로필 이미지 표시 여부를 설정합니다.</li>
+        <li><strong>아바타 모양</strong> — 원형 / 둥근 네모 / 네모 중 선택합니다.</li>
+        <li><strong>CSS 편집 (롤20 전용)</strong> — 롤20 플랫폼 감지 시에만 표시됩니다.</li>
+      </ul>
+      <h4>헤더 버튼</h4>
+      <ul>
+        <li><strong>달/해 아이콘</strong> — 다크/라이트 모드 전환. 내보내기 결과에는 영향 없음.</li>
+        <li><strong>휴지통 아이콘</strong> — 현재 채팅 데이터 초기화 (프로필 설정은 유지됨).</li>
+      </ul>
+    `
+  },
+  update: {
+    title: '업데이트 내역',
+    body: `
+      <h4>v2.1.0 <span style="font-weight:400;color:var(--text-3)">(26.06.03)</span></h4>
+      <ul>
+        <li>롤20 대용량 파일 처리 성능 개선 (비동기 파싱)</li>
+        <li>롤20 미리보기 페이지네이션 (500개 단위)</li>
+        <li>롤20 주사위 판정결과 색상 정확도 개선</li>
+        <li>보너스/패널티 주사위 카드 렌더링 지원</li>
+        <li>보너스 공격 주사위 (coc-attack) 지원</li>
+        <li>플랫폼 자동감지 전환 시 로딩 무한 스핀 수정</li>
+        <li>desc 메시지 이미지 표시 수정</li>
+      </ul>
+      <h4>v2.0.0 <span style="font-weight:400;color:var(--text-3)">(26.05.30)</span></h4>
+      <ul>
+        <li>카카오톡 / 디스코드 / 롤20 파서 추가</li>
+        <li>말풍선 / 이름 색상 커스터마이징</li>
+        <li>메시지 편집 시 이미지 첨부</li>
+        <li>IndexedDB 기반 프로필 이미지 영구 저장</li>
+        <li>아바타 모양 선택 (원형·둥근·사각)</li>
+        <li>최대 참여자 수 50명으로 확대</li>
+        <li>플랫폼 자동 감지 및 수동 선택</li>
+      </ul>
+      <h4>v1.1.2 <span style="font-weight:400;color:var(--text-3)">(25.12.08)</span></h4>
+      <ul>
+        <li>밴드 채팅 내보내기 두 가지 형식 자동 인식</li>
+      </ul>
+      <h4>v1.1.0 <span style="font-weight:400;color:var(--text-3)">(25.03.13)</span></h4>
+      <ul>
+        <li>도움말 시스템, @태그 강조, 드래그&드롭 파일 불러오기</li>
+        <li>다크모드에서 내보내기 시 라이트 색상 유지</li>
+        <li>선택 프로필 초기화 기능</li>
+      </ul>
+    `
+  }
+};
+window._showHelpDetail = function(id) {
+  const d = HELP_CONTENT[id];
+  if (!d) return;
+  document.getElementById('help-detail-title').textContent = d.title;
+  document.getElementById('help-detail-body').innerHTML = d.body;
+  document.getElementById('help-list-view').style.display = 'none';
+  document.getElementById('help-detail-view').style.display = 'flex';
+};
+window._showHelpList = function() {
+  document.getElementById('help-detail-view').style.display = 'none';
+  document.getElementById('help-list-view').style.display = '';
+};
+window._clearAllCache = function() {
+  if (!confirm('모든 캐시와 설정을 초기화하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) return;
+  const go = () => { localStorage.clear(); location.reload(); };
+  window.chatApp?.dataManager?.resetAllData().then(go) || go();
+};
+document.getElementById('help-btn').addEventListener('click', function() { window._showHelpList(); });
+</script>
+</body>
+</html>
