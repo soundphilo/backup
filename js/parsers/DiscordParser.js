@@ -9,6 +9,9 @@ class DiscordParser {
   }
 
   canParse(text) {
+    console.log("웹 앱으로 들어온 원본 텍스트 앞부분:\n", text.slice(0, 300));
+    console.log("헤더 매칭 결과:", text.includes('Guild:'), text.includes('Channel:'));
+    console.log("정규식 검사 결과 (하나라도 나와야 함):", this._regexTimestamp.test(text));
     if (!text || typeof text !== 'string') return false;
 
     // 1. 본문에 디스코드 고유의 한국어 타임스탬프 형태가 하나라도 존재하는지 확인
