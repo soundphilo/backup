@@ -352,6 +352,7 @@ body{font-family:-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;b
   }
 
   _timeKey(time) {
+    // [2026. 1. 7. 오후 12:59] 형식은 이 정규식에 매칭되지 않습니다.
     const m = time.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})\D+(오전|오후|AM|PM)\D+(\d{1,2}):(\d{2})/i);
     return m ? m.slice(1).join('-') : time;
   }
