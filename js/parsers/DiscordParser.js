@@ -72,7 +72,9 @@ class DiscordParser {
       // 타임스탬프 라인 = 새 메시지 시작
       const tsMatch = line.match(this._regexTimestamp);
       if (tsMatch) {
-        if (currentMessage) messages.push(currentMessage);
+        if (currentMessage) {
+          currentMessage.chatMessage = currentMessage.chatMessage.trimEnd();
+          messages.push(currentMessage);
         currentMessage = {
           time: tsMatch[1].trim(),
           username: tsMatch[2].trim(),
