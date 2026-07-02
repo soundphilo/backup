@@ -75,6 +75,7 @@ class DiscordParser {
         if (currentMessage) {
           currentMessage.chatMessage = currentMessage.chatMessage.trimEnd();
           messages.push(currentMessage);
+        }
         currentMessage = {
           time: tsMatch[1].trim(),
           username: tsMatch[2].trim(),
