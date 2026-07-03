@@ -233,6 +233,44 @@ class ChatBackupApp {
 
     // 페이지 언로드 시 Object URL 해제
     window.addEventListener('beforeunload', () => this.mediaManager.revokeAll());
+
+    // ── 미리보기 창 닉네임 실시간 수정 및 동기화 이벤트 ──────────────────
+    
+    // 1. 닉네임 입력 후 포커스가 빠져나갈 때(blur) 상태 저장 및 전체 동기화
+    document.addEventListener('blur', e => {
+      if (e.target && e.target.classList.contains('msg-name')) {
+        const updatedName = e.target.innerText.trim();
+        const originalName = e.target.getAttribute('data-username'); // 렌더러에서 넣어줄 고유 키값
+        
+        // 만약 공백으로 다 지웠다면 원래 이름으로 복구
+        if (!updatedName) {
+          e.target.innerText = originalName;
+          return;
+        }
+
+        // 앱 상태(state)의 displayNames 객체에 변경 사항 기록
+        this.state.displayNames[originalName] = updatedName;
+        this.dataManager.saveProfiles(); // 변경된 프로필 로컬에 즉시 저장
+
+        // 현재 화면에 떠 있는 동일 인물의 모든 닉네임을 실시간으로 일괄 변경
+        document.querySelectorAll(`.msg-name[data-username="${originalName}"]`).forEach(el => {
+          if (el !== e.target) el.innerText = updatedName;
+        });
+
+        // (선택 사항) 만약 왼쪽 패널의 프로필 인풋 카드가 열려 있다면 거기도 동기화
+        this.uiManager.renderProfileCards();
+      }
+    }, true); // blur 이벤트는 버블링되지 않으므로 세 번째 인자 true(캡처링) 필수!
+
+    // 2. 닉네임 수정 중 엔터를 치면 줄바꿈이 되지 않고 바로 반영되도록 처리
+    document.addEventListener('keydown', e => {
+      if (e.target && e.target.classList.contains('msg-name')) {
+        if (e.key === 'Enter') {
+          e.preventDefault(); // 줄바꿈 방지
+          e.target.blur();    // 포커스를 빼서 위의 blur 이벤트가 트리거되도록 유도
+        }
+      }
+    });
   }
 
   _syncToggles() {
