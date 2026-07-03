@@ -31,6 +31,7 @@ class ChatBackupApp {
     this.editingIndex  = null;
 
     this._forcePlatform = null; // 수동 플랫폼 선택
+    this._isNameBlurProcessing = false; // [추가] 리렌더링으로 인한 무한 blur 루프 방지 플래그
   }
 
   async init() {
@@ -234,11 +235,14 @@ class ChatBackupApp {
     // 페이지 언로드 시 Object URL 해제
     window.addEventListener('beforeunload', () => this.mediaManager.revokeAll());
 
-// ── 미리보기 창 닉네임 개별 수정 및 데이터/UI 완전히 동기화 ──────────────────
+    // ── 미리보기 창 닉네임 개별 수정 및 데이터/UI 완전히 동기화 ──────────────────
     
     // 1. 미리보기 창의 닉네임을 편집하고 포커스가 빠질 때(blur) 확실하게 데이터 원본 변경
     document.addEventListener('blur', e => {
       if (e.target && e.target.classList.contains('msg-name')) {
+        // [안전장치] 리렌더링으로 인해 연속 blur가 잡히는 무한 루프를 원천 차단합니다.
+        if (window.chatApp._isNameBlurProcessing) return;
+
         const updatedName = e.target.innerText.trim();
         
         // 부모 요소를 찾아 변경할 메시지의 고유 인덱스(index)를 가져옵니다.
@@ -246,44 +250,45 @@ class ChatBackupApp {
         if (!msgContainer) return;
         
         const index = parseInt(msgContainer.getAttribute('data-index'), 10);
-        if (isNaN(index) || !this.state.messages[index]) return;
+        if (isNaN(index) || !window.chatApp.state.messages[index]) return;
 
         // 아무것도 안 적고 나갔다면 원래 이름으로 원상 복구
         if (!updatedName) {
-          e.target.innerText = this.state.messages[index].username;
+          e.target.innerText = window.chatApp.state.messages[index].username;
           return;
         }
 
-        // [핵심 1] 원본 메시지 객체의 username을 완전히 새 이름으로 교체합니다.
-        // 이렇게 해야 대화 내용을 바꾸고 저장해도 이 이름이 유지가 됩니다!
-        this.state.messages[index].username = updatedName;
+        // 플래그 가동 (렌더링 도중 발생하는 자동 blur 무시 목적)
+        window.chatApp._isNameBlurProcessing = true;
 
-        // [핵심 2] HTML 요소 자체의 data-username 속성도 새 이름으로 업데이트해 줍니다.
+        // [구조 수정] window.chatApp 인스턴스를 직접 명시하여 고정합니다.
+        window.chatApp.state.messages[index].username = updatedName;
         msgContainer.setAttribute('data-username', updatedName);
 
-        // [핵심 3] Roll20 플랫폼인 경우 rawHtml 내부 문자열 이름도 함께 파싱하여 변경
-        if (this.state.detectedPlatform === 'roll20' && this.state.messages[index].rawHtml) {
-          let raw = this.state.messages[index].rawHtml;
-          
-          // msg-name 클래스를 가진 태그 내부의 이름 치환
+        // Roll20 플랫폼 특화 구조 치환 로직
+        if (window.chatApp.state.detectedPlatform === 'roll20' && window.chatApp.state.messages[index].rawHtml) {
+          let raw = window.chatApp.state.messages[index].rawHtml;
           raw = raw.replace(/(class="[^"]*msg-name[^"]*"[^>]*>)(.*?)(<\/)/g, `$1${updatedName}$3`);
-          // 롤20 인라인 대화 형태 (이름: 본문) 구조 치환
           raw = raw.replace(/([^\s<>"':]+)(:\s*<\/span>)/g, `${updatedName}$2`);
-          
-          this.state.messages[index].rawHtml = raw;
-          if (this.state.messages[index].chatMessage === this.state.messages[index].rawHtml) {
-            this.state.messages[index].chatMessage = raw;
+          window.chatApp.state.messages[index].rawHtml = raw;
+          if (window.chatApp.state.messages[index].chatMessage === window.chatApp.state.messages[index].rawHtml) {
+            window.chatApp.state.messages[index].chatMessage = raw;
           }
         }
 
         console.log(`[동기화 완료] 인덱스 ${index}번 메시지 유저명이 '${updatedName}'으로 고정되었습니다.`);
 
-        // [핵심 4] 변경된 유저 정보가 반영되도록 프로필 데이터를 세이브하고 UI를 전면 새로고침합니다.
-        this.uiManager._saveProfiles();      // 현재 상태 캐싱 및 저장 데이터베이스 동기화
-        this.uiManager.renderProfileCards(); // 왼쪽 하단 참여자란에 새 이름 즉시 추가
-        this.uiManager.renderMessages();     // 대화 내용 수정 시에도 안 풀리도록 리렌더링 확정
+        // 프로필 데이터 세이브 및 전면 새로고침 체인 가동
+        window.chatApp.uiManager._saveProfiles();      
+        window.chatApp.uiManager.renderProfileCards(); 
+        window.chatApp.uiManager.renderMessages();     
+
+        // 처리가 완벽히 끝난 후 안전장치 해제
+        setTimeout(() => {
+          window.chatApp._isNameBlurProcessing = false;
+        }, 50);
       }
-    }, true);
+    }, true); // 캡처링 유지
 
     // 2. 닉네임 수정 중 엔터를 치면 줄바꿈되지 않고 즉시 반영 처리
     document.addEventListener('keydown', e => {
@@ -363,14 +368,12 @@ class ChatBackupApp {
       this.state.detectedPlatform = platform;
 
       // 롤20: avatarUrl → fetch → Blob → IndexedDB 저장
-      // 각 username에 대해 중복 없이 한 번만, 완료 후 렌더링 갱신
       if (platform === 'roll20') {
         const avatarJobs = [];
         const seen = new Set();
         for (const msg of messages) {
           if (!msg.avatarUrl || !msg.username || seen.has(msg.username)) continue;
           seen.add(msg.username);
-          // 이미 IndexedDB에서 불러온 이미지가 있으면 덮어쓰지 않음
           if (this.state.userProfileImages[msg.username]) continue;
           const url = msg.avatarUrl, uname = msg.username;
           avatarJobs.push((async () => {
@@ -380,10 +383,9 @@ class ChatBackupApp {
               const blob = await resp.blob();
               const objectUrl = await this.mediaManager.setProfileImage(uname, blob);
               if (objectUrl) this.state.userProfileImages[uname] = objectUrl;
-            } catch { /* CORS 등 실패 시 무시 */ }
+            } catch { /* 무시 */ }
           })());
         }
-        // 모든 fetch 완료 후 렌더링 갱신 (비동기, 메인 렌더링 블로킹 없음)
         if (avatarJobs.length) {
           Promise.allSettled(avatarJobs).then(() => {
             this.uiManager.renderProfileCards();
@@ -392,7 +394,6 @@ class ChatBackupApp {
         }
       }
 
-      // 플랫폼 알약 자동 선택
       this._updatePlatformPill(platform);
       this.uiManager.updateDetectBadge(platform, messages.length);
       this.uiManager.renderProfileCards();
@@ -402,12 +403,11 @@ class ChatBackupApp {
       else this.uiManager.updateDetectBadge(null, 0);
     } finally {
       this.state.isProcessing = false;
-      this.uiManager.toggleLoading(false); // silent 여부 관계없이 항상 끔
+      this.uiManager.toggleLoading(false);
     }
   }
 
   _updatePlatformPill(platform) {
-    // 롤20 CSS 편집 행 표시/숨김 (forcePlatform 여부 관계없이 항상)
     const r20Row = document.getElementById('r20-css-row');
     if (r20Row) r20Row.style.display = (platform === 'roll20') ? '' : 'none';
 
@@ -425,17 +425,15 @@ class ChatBackupApp {
       return;
     }
     try {
-      // UTF-8 먼저 시도, 깨지면 EUC-KR로 재시도
       let text = await file.text();
       if (text.includes('\ufffd') || /[\u00c0-\u00ff]{3,}/.test(text.slice(0,200))) {
         try {
           const buf = await file.arrayBuffer();
           text = new TextDecoder('euc-kr').decode(buf);
-        } catch { /* UTF-8 유지 */ }
+        } catch { }
       }
       const ta = document.getElementById('input-text');
       if (ta) {
-        // 500KB 초과 시 textarea에 직접 박지 않음 (렌더링 부하 방지)
         const SIZE_LIMIT = 500 * 1024;
         if (text.length > SIZE_LIMIT) {
           const kb = Math.round(text.length / 1024);
@@ -462,7 +460,6 @@ class ChatBackupApp {
     const container = document.querySelector(`[data-index="${index}"]`);
     if (!container) return;
 
-    // .r20-desc / .r20-pill 은 container 자체가 편집 대상
     let msgEl;
     if (container.classList.contains('r20-desc') || container.classList.contains('r20-pill')) {
       msgEl = container;
@@ -473,14 +470,10 @@ class ChatBackupApp {
 
     this.editingIndex = index;
     const m = this.state.messages[index];
-    // CSS 편집 모드면 rawHtml, 아니면 chatMessage 전달
-    const editText = (m.rawHtml && this.state.r20CssEditEnabled)
-      ? m.rawHtml
-      : m.chatMessage;
+    const editText = (m.rawHtml && this.state.r20CssEditEnabled) ? m.rawHtml : m.chatMessage;
     this.uiManager.createEditInterface(msgEl, editText, index);
   }
 
-  // rawHtml 직접 편집 저장
   saveEditRaw(index, newHtml, attachedImage) {
     if (newHtml && newHtml.trim()) {
       this.state.messages[index].rawHtml     = newHtml.trim();
@@ -513,10 +506,8 @@ class ChatBackupApp {
     if (confirm('이 메시지를 삭제하시겠습니까?')) {
       this.state.messages.splice(index, 1);
       this.editingIndex = null;
-      this.uiManager.renderMessages(); // editingIndex=null이므로 편집창 없이 렌더링
-    }
-    // 취소 시: cancelEdit으로 편집창 닫기
-    else {
+      this.uiManager.renderMessages();
+    } else {
       this.cancelEdit();
     }
   }
