@@ -234,18 +234,16 @@ class UIManager {
   }
 
   _buildPageNav(page, totalPages, start, end) {
-    // 표시할 페이지 번호 목록 계산 (최대 7개 + ... 생략)
     const pages = [];
-    const WING = 2; // 현재 페이지 좌우로 보여줄 수
+    const WING = 2;
 
     const addPage = (p) => { if (!pages.includes(p) && p >= 0 && p < totalPages) pages.push(p); };
 
-    addPage(0);                                      // 첫 페이지
-    for (let i = page - WING; i <= page + WING; i++) addPage(i); // 현재 주변
-    addPage(totalPages - 1);                         // 마지막 페이지
+    addPage(0);                                      
+    for (let i = page - WING; i <= page + WING; i++) addPage(i); 
+    addPage(totalPages - 1);                         
     pages.sort((a, b) => a - b);
 
-    // 버튼 HTML 생성 (빈 공간에 ... 삽입)
     let btns = '';
     for (let i = 0; i < pages.length; i++) {
       if (i > 0 && pages[i] - pages[i - 1] > 1) {
@@ -273,11 +271,11 @@ class UIManager {
     this._r20TotalPages = undefined;
   }
 
-  // ── Roll20 전용 렌더러   // ── Roll20 전용 렌더러 ────────────────────────────────────────
+  // ── Roll20 전용 렌더러 ────────────────────────────────────────
   _renderMessageR20(msg, index, isMe, displayName, profileUrl, isFirstInGroup = true) {
     const i = index;
 
-    // ── desc (GM 지문) ──────────────────────────────────────────
+    // desc (GM 지문)
     if (msg.isDesc) {
       let content = msg.rawHtml || this._esc(msg.chatMessage).replace(/\n/g,'<br>');
       if (msg.attachedImage) {
@@ -286,28 +284,28 @@ class UIManager {
       return `<div class="r20-msg r20-desc" data-index="${i}" onclick="window.chatApp.startEdit(${i})">${content}</div>`;
     }
 
-    // ── 판정 pill: rawHtml에 linear-gradient 있으면 pill ──────────
+    // 판정 pill
     if (msg.rawHtml && msg.rawHtml.includes('linear-gradient')) {
       return `<div class="r20-msg r20-pill" data-index="${i}" onclick="window.chatApp.startEdit(${i})">${msg.rawHtml}</div>`;
     }
 
-    // ── 주사위 테이블 ────────────────────────────────────────────
+    // 주사위 테이블
     if (msg.msgType === 'roll' || msg.msgType === 'roll-unknown' || msg.msgType === 'inline-roll') {
       const avatarHtml = this._r20Avatar(profileUrl);
       let content = msg.rawHtml || this._esc(msg.chatMessage);
       if (msg.attachedImage) {
         content += `<div class="bubble-img-wrap"><img class="bubble-img" src="${this._esc(msg.attachedImage)}" alt=""></div>`;
       }
-      return `<div class="r20-msg r20-chat r20-roll-msg" data-index="${i}" onclick="window.chatApp.startEdit(${i})">
+      return `<div class="r20-msg r20-chat r20-roll-msg" data-index="${i}">
   ${avatarHtml}
   <div class="r20-body" data-edit-body>
-    <div class="r20-name">${this._esc(displayName)}</div>
-    <div class="r20-roll-wrap">${content}</div>
+    <div class="r20-name msg-name" contenteditable="true" spellcheck="false" onclick="event.stopPropagation()">${this._esc(displayName)}</div>
+    <div class="r20-roll-wrap" onclick="window.chatApp.startEdit(${i})">${content}</div>
   </div>
 </div>`;
     }
 
-    // ── 일반 발언 ────────────────────────────────────────────────
+    // 일반 발언
     const customColor = this.app.state.userBubbleColors?.[msg.username] || null;
     const rowBg = customColor || (isMe ? '#dce8f5' : null);
     const rowStyle = rowBg ? ` style="background:${rowBg};${customColor ? 'color:' + this._contrastColor(rowBg) + ';' : ''}"` : '';
@@ -322,21 +320,23 @@ class UIManager {
       content += `<div class="bubble-img-wrap"><img class="bubble-img" src="${this._esc(msg.attachedImage)}" alt=""></div>`;
     }
 
-    // 이름: 대화내용 인라인, 배경색 기준 대비색 적용
     const avatarHtml = this._r20Avatar(profileUrl);
     const contrastFg = rowBg ? this._contrastColor(rowBg) : null;
+    
+    // [수정] Roll20 인라인 발언명 수정이 가능하도록 span 구조에 msg-name, contenteditable 부여
     const nameHtml = isFirstInGroup
-      ? `<span class="r20-name-inline"${contrastFg ? ` style="color:${contrastFg}"` : ''}>${this._esc(displayName)}: </span>`
+      ? `<span class="r20-name-inline msg-name"${contrastFg ? ` style="color:${contrastFg}"` : ''} contenteditable="true" spellcheck="false" onclick="event.stopPropagation()">${this._esc(displayName)}: </span>`
       : '';
+      
     const textStyle = contrastFg ? ` style="color:${contrastFg}"` : '';
     const contCls = isFirstInGroup ? '' : ' r20-cont';
     const leftEl  = isFirstInGroup
       ? avatarHtml
       : '<div class="r20-avatar r20-avatar-spacer"></div>';
-    return `<div class="r20-msg r20-chat${contCls}${isMe ? ' r20-mine' : ''}" data-index="${i}" onclick="window.chatApp.startEdit(${i})"${rowStyle}>
+    return `<div class="r20-msg r20-chat${contCls}${isMe ? ' r20-mine' : ''}" data-index="${i}"${rowStyle}>
   ${leftEl}
   <div class="r20-body" data-edit-body>
-    <div class="r20-text"${textStyle}>${nameHtml}${content}</div>
+    <div class="r20-text"${textStyle}>${nameHtml}<span onclick="window.chatApp.startEdit(${i})">${content}</span></div>
   </div>
 </div>`;
   }
@@ -345,13 +345,11 @@ class UIManager {
     if (profileUrl) {
       return `<div class="r20-avatar"><img src="${this._esc(profileUrl)}" alt=""></div>`;
     }
-    // 이니셜 없는 회색 아바타
     return `<div class="r20-avatar r20-avatar-blank"></div>`;
   }
 
   _renderMessage(msg, index, isMe, displayName, profileUrl, bubbleColor, isFirst, isLast) {
     if (msg.isDesc) {
-      // rawHtml 있으면 그대로, 없으면 텍스트 이스케이프
       const descContent = msg.rawHtml || this._esc(msg.chatMessage).replace(/\n/g,'<br>');
       return `<div class="chat-message other desc group-end" data-index="${index}">
   <div class="msg-avatar hidden"></div>
@@ -365,7 +363,6 @@ class UIManager {
     if (!isFirst) cls.push('cont');
     if (isLast) cls.push('group-end');
 
-    // 아바타 — isFirst일 때만 실제 이미지/원, 나머지는 빈 자리 유지
     const hideMyAvatar = isMe && !this.app.state.showMyProfile;
     const showAvatar   = isFirst && !hideMyAvatar;
     const avatarInner  = showAvatar
@@ -373,11 +370,12 @@ class UIManager {
       : '';
     const avatarClass  = `msg-avatar${showAvatar ? '' : ' hidden'}`;
 
-    // 이름
     const nameColor = this.app.state.userNameColors?.[msg.username] || null;
     const nameStyle = nameColor ? ` style="color:${nameColor}"` : '';
+    
+    // [수정] 일반 메신저형 프로필 이름 렌더링에 msg-name 클래스와 contenteditable 속성 주입
     const nameHtml = isFirst
-      ? `<div class="msg-name"${nameStyle}>${this._esc(displayName)}</div>` : '';
+      ? `<div class="msg-name msg-name"${nameStyle} contenteditable="true" spellcheck="false">${this._esc(displayName)}</div>` : '';
 
     let content;
     if (msg.rawHtml) {
@@ -397,14 +395,12 @@ class UIManager {
       content += `<div class="bubble-img-wrap"><img class="bubble-img" src="${this._esc(msg.attachedImage)}" alt=""></div>`;
     }
 
-    // 말풍선 색상 (커스텀)
     let bubbleStyle = '';
     if (bubbleColor) {
       const fg = this._contrastColor(bubbleColor);
       bubbleStyle = `style="background:${bubbleColor};color:${fg};"`;
     }
 
-    // 시간
     const timeHtml = isLast ? `<div class="msg-time">${this._esc(msg.time)}</div>` : '';
 
     return `<div class="${cls.join(' ')}" data-index="${index}" data-username="${this._esc(msg.username)}">
@@ -464,7 +460,6 @@ class UIManager {
       row.className = `profile-row${isMe ? ' is-me' : ''}${isHidden ? ' is-hidden' : ''}`;
       row.dataset.username = username;
 
-      // 아바타
       const avatarWrap = document.createElement('div');
       avatarWrap.className = 'profile-avatar-wrap';
       avatarWrap.title = '사진 변경';
@@ -473,7 +468,6 @@ class UIManager {
         : `<div class="avatar-placeholder">${this._esc(this._avatarChar(displayName))}</div>`;
       avatarWrap.innerHTML += `<div class="avatar-upload-hint"><i class="fas fa-camera"></i></div>`;
 
-      // 숨김 파일 input (avatarWrap 클릭 이벤트보다 먼저 선언)
       const fileInput = document.createElement('input');
       fileInput.type = 'file';
       fileInput.accept = 'image/*';
@@ -483,10 +477,8 @@ class UIManager {
         if (file) this._handleImageUpload(username, file);
       });
       row.appendChild(fileInput);
-      // fileInput 선언 이후에 클릭 이벤트 연결
       avatarWrap.addEventListener('click', () => fileInput.click());
 
-      // 이름 + 원본
       const infoCol = document.createElement('div');
       infoCol.className = 'profile-info-col';
       const nameInput = document.createElement('input');
@@ -504,7 +496,6 @@ class UIManager {
       infoCol.appendChild(nameInput);
       infoCol.appendChild(origSpan);
 
-      // 선택 체크박스 (선택 모드에서만 표시)
       const cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.className = 'profile-select-cb';
@@ -512,24 +503,20 @@ class UIManager {
       cb.style.display = this._selectionMode ? 'flex' : 'none';
       row.appendChild(cb);
 
-      // 액션들
       const actions = document.createElement('div');
       actions.className = 'profile-row-actions';
 
-      // 말풍선 색상 스워치
       const swatch = document.createElement('div');
       swatch.className = 'color-swatch';
       swatch.title = '말풍선 색상';
       swatch.style.background = bubbleColor || (isMe ? '#1a1a1a' : '#f0f0ee');
       swatch.addEventListener('click', e => this._openColorPicker(e, username, swatch));
 
-      // 내 메시지 토글
       const meBtn = document.createElement('button');
       meBtn.className = 'me-toggle';
       meBtn.textContent = isMe ? '나' : '나로 설정';
       meBtn.addEventListener('click', () => this._toggleMe(username, row, meBtn, swatch));
 
-      // 개별 초기화 버튼
       const resetBtn = document.createElement('button');
       resetBtn.className = 'profile-reset-btn';
       resetBtn.title = '이 프로필 초기화';
@@ -572,7 +559,6 @@ class UIManager {
       if (enable) row.classList.add('selecting');
     });
 
-    // 헤더 버튼 전환
     document.getElementById('select-mode-btn')?.style.setProperty('display', enable ? 'none' : '');
     const resetSelBtn = document.getElementById('reset-selected-btn');
     const cancelSelBtn = document.getElementById('cancel-select-btn');
@@ -660,7 +646,6 @@ class UIManager {
     try {
       this.toggleLoading(true, '이미지 처리 중...');
       const url = await this.app.mediaManager.setProfileImage(username, file);
-      // 아바타 업데이트
       const row = document.querySelector(`[data-username="${CSS.escape(username)}"]`);
       if (row) {
         const wrap = row.querySelector('.profile-avatar-wrap');
@@ -691,7 +676,6 @@ class UIManager {
     const pop = document.createElement('div');
     pop.className = 'color-picker-pop';
 
-    // 탭 헤더
     const tabs = document.createElement('div');
     tabs.className = 'cpick-tabs';
     const tabBubble = document.createElement('button');
@@ -704,15 +688,12 @@ class UIManager {
     tabs.appendChild(tabName);
     pop.appendChild(tabs);
 
-    // 최근 색상
     const recentColors = this.app.state.recentColors || [];
 
-    // 탭 패널 생성 헬퍼
     const makePanel = (currentColor, onApply, onReset) => {
       const panel = document.createElement('div');
       panel.className = 'cpick-panel';
 
-      // 최근 사용 색상
       if (recentColors.length > 0) {
         const recentLabel = document.createElement('div');
         recentLabel.className = 'cpick-recent-label';
@@ -736,7 +717,6 @@ class UIManager {
       const grid = document.createElement('div');
       grid.className = 'color-swatches-grid';
 
-      // 첫 칸: ⊘ 색상 없음
       const noColor = document.createElement('div');
       noColor.className = 'color-preset color-preset-none';
       noColor.title = '색상 없음 (기본값)';
@@ -755,7 +735,6 @@ class UIManager {
       }
       panel.appendChild(grid);
 
-      // hex 직접 입력
       const hexRow = document.createElement('div');
       hexRow.className = 'cpick-hex-row';
       const preview = document.createElement('div');
@@ -769,7 +748,6 @@ class UIManager {
       hexInput.value = currentColor || '';
       hexInput.addEventListener('input', () => {
         let v = hexInput.value.trim();
-        // # 없으면 자동 추가
         if (v && !v.startsWith('#')) { v = '#' + v; hexInput.value = v; }
         if (/^#[0-9a-fA-F]{6}$/.test(v)) preview.style.background = v;
       });
@@ -790,8 +768,6 @@ class UIManager {
       hexRow.appendChild(hexInput);
       hexRow.appendChild(applyBtn);
       panel.appendChild(hexRow);
-
-
 
       return panel;
     };
@@ -868,12 +844,9 @@ class UIManager {
     if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) return;
     if (!this.app.state.recentColors) this.app.state.recentColors = [];
     const list = this.app.state.recentColors;
-    // 중복 제거
     const idx = list.indexOf(color);
     if (idx !== -1) list.splice(idx, 1);
-    // 앞에 추가
     list.unshift(color);
-    // 최대 4개 유지
     if (list.length > 4) list.length = 4;
     this.app.dataManager.saveSetting('recentColors', list);
   }
@@ -885,7 +858,6 @@ class UIManager {
     const r = parseInt(c.substr(0,2),16);
     const g = parseInt(c.substr(2,2),16);
     const b = parseInt(c.substr(4,2),16);
-    // 상대 휘도
     const lum = (0.299*r + 0.587*g + 0.114*b) / 255;
     return lum > 0.5 ? '#1a1a1a' : '#ffffff';
   }
@@ -901,22 +873,17 @@ class UIManager {
                             bubbleEl.hasAttribute('data-edit-body');
     const wrap = document.createElement('div');
     wrap.className = 'edit-wrap';
-    // 편집 wrap 클릭이 부모 .r20-chat onclick으로 버블링되면 startEdit이 재호출됨을 방지
     wrap.addEventListener('click', e => e.stopPropagation());
 
-    // 꾸미기 패널 "CSS 편집" 체크 → app.state에서 읽음 (즉시 반영)
-    // ta 생성 전에 먼저 판단해야 초기값이 맞게 들어감
     const r20CssEditEnabled = this.app.state.r20CssEditEnabled || false;
     const useRawHtml = !!msg.rawHtml && r20CssEditEnabled;
     const initialText = useRawHtml ? (msg.rawHtml || currentText) : currentText;
 
-    // 텍스트에리어
     const ta = document.createElement('textarea');
     ta.className = 'edit-textarea';
     ta.value = initialText;
     ta.rows = Math.max(4, Math.min(20, initialText.split('\n').length + 2));
 
-    // 이미지 미리보기 (기존 첨부 이미지 있으면 표시)
     const imgPreviewWrap = document.createElement('div');
     imgPreviewWrap.className = 'edit-img-preview-wrap';
     imgPreviewWrap.style.display = 'none';
@@ -941,11 +908,9 @@ class UIManager {
     };
     updateImgPreview();
 
-    // 하단 액션바
     const actions = document.createElement('div');
     actions.className = 'edit-actions';
 
-    // 이미지 첨부 버튼
     const imgInput = document.createElement('input');
     imgInput.type = 'file';
     imgInput.accept = 'image/*';
@@ -980,7 +945,6 @@ class UIManager {
     cancelBtn.textContent = '취소';
     cancelBtn.addEventListener('click', () => this.app.cancelEdit());
 
-    // (CSS 토글 UI 제거 — 체크박스 하나로 일괄 제어)
     const cssToggleWrap = document.createElement('div');
     cssToggleWrap.style.display = 'none';
 
@@ -990,7 +954,6 @@ class UIManager {
     saveBtn.textContent = '저장';
     saveBtn.addEventListener('click', () => {
       if (useRawHtml) {
-        // CSS 편집 모드: rawHtml로 저장
         this.app.saveEditRaw(index, ta.value, attachedImageData);
       } else {
         this.app.saveEdit(index, ta.value, attachedImageData);
@@ -1019,7 +982,6 @@ class UIManager {
     wrap.appendChild(actions);
 
     if (isContainerEdit) {
-      // container 자체: 원본 내용 숨기고 wrap 자식으로 추가
       bubbleEl._r20OriginalContent = bubbleEl.innerHTML;
       bubbleEl._r20OriginalOnclick = bubbleEl.onclick;
       bubbleEl.innerHTML = '';
@@ -1058,12 +1020,10 @@ class UIManager {
 
   // ── 유틸 ────────────────────────────────────────────────────
 
-  // 아바타 표시 글자: 앞쪽 기호/괄호 제거 후 첫 의미있는 글자
   _avatarChar(name) {
     if (!name) return '?';
-    // 앞쪽 괄호 블록([사망], (KP) 등) 전부 제거 후 첫 의미있는 글자
     const stripped = name
-      .replace(/^(\s*[\[\(【<「『《〈][^\]\)】>」』》〉]*[\]\)】>」』》〉]\s*)+/, '')
+      .replace(/^(\s*[\[\(【<「『《〈][^\]\)】> Rog ]*[\]\)】>」』》〉]\s*)+/, '')
       .trim();
     return (stripped[0] || name[0] || '?').toUpperCase();
   }
