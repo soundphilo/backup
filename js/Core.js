@@ -234,9 +234,9 @@ class ChatBackupApp {
     // 페이지 언로드 시 Object URL 해제
     window.addEventListener('beforeunload', () => this.mediaManager.revokeAll());
 
-// ── 미리보기 창 닉네임 개별 수정 및 신규 참여자 실시간 등록 ──────────────────
+// ── 미리보기 창 닉네임 개별 수정 및 데이터/UI 완전히 동기화 ──────────────────
     
-    // 1. 미리보기 창의 닉네임을 편집하고 포커스가 빠질 때(blur) 개별 반영 및 데이터 저장
+    // 1. 미리보기 창의 닉네임을 편집하고 포커스가 빠질 때(blur) 확실하게 데이터 원본 변경
     document.addEventListener('blur', e => {
       if (e.target && e.target.classList.contains('msg-name')) {
         const updatedName = e.target.innerText.trim();
@@ -254,33 +254,38 @@ class ChatBackupApp {
           return;
         }
 
-        // [핵심 업데이트] 원본 데이터 배열에 새 이름을 완벽하게 주입합니다.
+        // [핵심 1] 원본 메시지 객체의 username을 완전히 새 이름으로 교체합니다.
+        // 이렇게 해야 대화 내용을 바꾸고 저장해도 이 이름이 유지가 됩니다!
         this.state.messages[index].username = updatedName;
 
-        // Roll20 플랫폼의 경우, 내보내기(HTML 복사) 시 rawHtml 데이터를 우선적으로 참조하므로
-        // rawHtml 내부의 이름 텍스트도 함께 교체해 주어야 유실되지 않고 저장됩니다.
+        // [핵심 2] HTML 요소 자체의 data-username 속성도 새 이름으로 업데이트해 줍니다.
+        msgContainer.setAttribute('data-username', updatedName);
+
+        // [핵심 3] Roll20 플랫폼인 경우 rawHtml 내부 문자열 이름도 함께 파싱하여 변경
         if (this.state.detectedPlatform === 'roll20' && this.state.messages[index].rawHtml) {
-          // 정규식을 이용해 기존 이름 영역을 새 이름으로 치환합니다.
           let raw = this.state.messages[index].rawHtml;
           
-          // r20-name 클래스나 r20-name-inline 뒤에 오는 텍스트 치환
+          // msg-name 클래스를 가진 태그 내부의 이름 치환
           raw = raw.replace(/(class="[^"]*msg-name[^"]*"[^>]*>)(.*?)(<\/)/g, `$1${updatedName}$3`);
+          // 롤20 인라인 대화 형태 (이름: 본문) 구조 치환
           raw = raw.replace(/([^\s<>"':]+)(:\s*<\/span>)/g, `${updatedName}$2`);
           
           this.state.messages[index].rawHtml = raw;
-          this.state.messages[index].chatMessage = raw; // 동기화
+          if (this.state.messages[index].chatMessage === this.state.messages[index].rawHtml) {
+            this.state.messages[index].chatMessage = raw;
+          }
         }
 
-        console.log(`[데이터 반영 완료] 인덱스 ${index} -> 새 참여자 이름: ${updatedName}`);
+        console.log(`[동기화 완료] 인덱스 ${index}번 메시지 유저명이 '${updatedName}'으로 고정되었습니다.`);
 
-        // [메커니즘 동기화] 데이터가 바뀌었으므로 프로필 데이터베이스(IDB) 구조 갱신 및 전체 UI 강제 리렌더링
-        this.uiManager._saveProfiles();      // 변경사항 내부 프로필 저장소에 동기화
-        this.uiManager.renderProfileCards(); // 왼쪽 하단 참여자 목록 새로고침 (새 이름 등장!)
-        this.uiManager.renderMessages();     // 미리보기 화면 새로고침하여 레이아웃 확정
+        // [핵심 4] 변경된 유저 정보가 반영되도록 프로필 데이터를 세이브하고 UI를 전면 새로고침합니다.
+        this.uiManager._saveProfiles();      // 현재 상태 캐싱 및 저장 데이터베이스 동기화
+        this.uiManager.renderProfileCards(); // 왼쪽 하단 참여자란에 새 이름 즉시 추가
+        this.uiManager.renderMessages();     // 대화 내용 수정 시에도 안 풀리도록 리렌더링 확정
       }
     }, true);
 
-    // 2. 닉네임 수정 중 엔터를 치면 줄바꿈되지 않고 즉시 포커스 아웃(반영) 처리
+    // 2. 닉네임 수정 중 엔터를 치면 줄바꿈되지 않고 즉시 반영 처리
     document.addEventListener('keydown', e => {
       if (e.target && e.target.classList.contains('msg-name')) {
         if (e.key === 'Enter') {
