@@ -51,18 +51,13 @@ class DiscordParser {
         if (headerDone >= 2) inHeader = false;
         continue;
       }
-      if (inHeader) continue;
-
-      // 꼬리말 건너뛰기
-      if (line.startsWith('Exported ') && line.includes('message')) continue;
 
       // 2. 타임스탬프 라인 매칭 = 새 메시지 시작
       const tsMatch = line.match(this._regexTimestamp);
       if (tsMatch) {
-        if (currentMessage) {
-          currentMessage.chatMessage = currentMessage.chatMessage.trim();
-          messages.push(currentMessage);
-        }
+        inHeader = false; // 헤더 강제 종료 플래그
+        pushCurrentMessage();
+        
         currentMessage = {
           time: tsMatch[1].trim(),
           username: tsMatch[2].trim(),
@@ -72,6 +67,9 @@ class DiscordParser {
       }
 
       // 첫 타임스탬프가 나오기 전의 잡다한 라인은 스킵
+      if (inHeader) continue;
+        
+      if (line.startsWith('Exported ') && line.includes('message')) continue;
       if (!currentMessage) continue;
 
       // 3. 메타 정보 라인 스킵
